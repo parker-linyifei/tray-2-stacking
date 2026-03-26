@@ -474,13 +474,16 @@
     function createPalletBase(trayW, trayL, trayH) {
         const group = new THREE.Group();
         const trayGeo = new THREE.BoxGeometry(trayL, trayH, trayW);
-        const trayMat = new THREE.MeshStandardMaterial({ color: 0xe0bc7a, roughness: 0.5, metalness: 0.1 });
+        // 托盘颜色：调整为参考图的金黄色托盘底座
+        // 参考图更接近“平涂”效果：改用不受光照影响的基础材质
+        const trayMat = new THREE.MeshBasicMaterial({ color: 0xe2b84a });
         const trayMesh = new THREE.Mesh(trayGeo, trayMat);
         trayMesh.position.set(0, trayH / 2, 0);
-        trayMesh.castShadow = true;
-        trayMesh.receiveShadow = true;
+        trayMesh.castShadow = false;
+        trayMesh.receiveShadow = false;
         group.add(trayMesh);
-        const edgeMat = new THREE.MeshStandardMaterial({ color: 0xc2a15b });
+        // 防滑条颜色：调整为更接近参考图的深金黄
+        const edgeMat = new THREE.MeshBasicMaterial({ color: 0xc99a31 });
         const barPos = [
             [-trayL/2 + 20, trayH-5, 0], [trayL/2 - 20, trayH-5, 0],
             [0, trayH-5, -trayW/2 + 20], [0, trayH-5, trayW/2 - 20]
@@ -655,17 +658,21 @@
     function createSolidBox(width, height, depth, position) {
         const group = new THREE.Group();
         const isWidthLong = width >= depth;
-        const redMat = new THREE.MeshStandardMaterial({ color: 0xcf3e3e, roughness: 0.38, metalness: 0.06 });
-        const blueMat = new THREE.MeshStandardMaterial({ color: 0x2c5f9a, roughness: 0.38, metalness: 0.06 });
-        const darkMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e6, roughness: 0.42, metalness: 0.04 });
+        // 纸箱颜色：调整为参考图的亮红/亮蓝/浅灰顶面
+        // 颜色变暗，并且按你的要求“蓝变红、红变蓝”（交换红/蓝材质颜色）
+        // 参考图更接近“平涂”效果：改用基础材质 + 纯色
+        const redMat = new THREE.MeshBasicMaterial({ color: 0x164f9a });
+        const blueMat = new THREE.MeshBasicMaterial({ color: 0xb0121a });
+        const darkMat = new THREE.MeshBasicMaterial({ color: 0xf7f7f7 });
         let materials = isWidthLong ? [redMat, redMat, darkMat, darkMat, blueMat, blueMat] : [blueMat, blueMat, darkMat, darkMat, redMat, redMat];
         const boxMesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), materials);
-        boxMesh.castShadow = true;
-        boxMesh.receiveShadow = true;
+        boxMesh.castShadow = false;
+        boxMesh.receiveShadow = false;
         boxMesh.position.copy(position);
         group.add(boxMesh);
         const edgesGeo = new THREE.EdgesGeometry(boxMesh.geometry);
-        const edgesMat = new THREE.LineBasicMaterial({ color: 0x4b5563 });
+        // 轮廓线：参考图为偏黑的细线
+        const edgesMat = new THREE.LineBasicMaterial({ color: 0x000000 });
         const wireframe = new THREE.LineSegments(edgesGeo, edgesMat);
         boxMesh.add(wireframe);
         return group;
@@ -876,31 +883,55 @@
             // 以堆叠中心点为参考，后续用于把文字推到托盘“外侧”贴边显示
             const centerScreen = projectToScreen(new THREE.Vector3(0, actualTotalHeight / 2, 0));
 
-            // 关键修改：为了保证“任意旋转角度导出后数字位置都一致”，
-            // 这里改为使用固定的 2D 屏幕坐标绘制数字，而不是把 3D 点投影到屏幕。
-            // （否则旋转会改变 project() 的结果，导致数字漂移）
+            // 贴边锚定（跟随模型旋转）：使用固定的 3D 边角锚点投影到屏幕，
+            // 再叠加很小的像素偏移，把数字压到对应边线附近。
+            // 数字只画“数值本身”（不画画框/不画画底/不含“宽/长/总高”前缀）。
 
             function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+            function clampX(x) { return clamp(x, 0, w); }
+            function clampY(y) { return clamp(y, 0, h); }
 
-            // 收拢与模型的距离：把数字整体向画面中心靠近一点
-            const widthX = clamp(Math.floor(w * 0.22), 0, w);
-            const lengthX = clamp(Math.floor(w * 0.78), 0, w);
+            // 固定锚点（按你最新要求“居中贴边”）：
+            // - 1000：托盘宽边（左侧底边）中点
+            // - 1200：托盘长度边（底部可见的那条长边）中点（自动选择更靠下的那条边）
+            // - 2126：右侧高度中点（贴在边外侧并向右偏移）
+            const widthAnchor = projectToScreen(new THREE.Vector3(-trayL / 2, 0, 0));
+            const lengthFront = projectToScreen(new THREE.Vector3(0, 0, -trayW / 2));
+            const lengthBack = projectToScreen(new THREE.Vector3(0, 0, trayW / 2));
+            // 选择屏幕 y 更大的那条（通常更靠近画面底部，更像“底部可见长边”）
+            const lengthAnchor = (lengthFront.y >= lengthBack.y) ? lengthFront : lengthBack;
+            const heightAnchor = projectToScreen(new THREE.Vector3(trayL / 2, stackMidY, 0));
 
-            // 底部两侧数字：贴在托盘底边附近（避免碰到表格区域）
-            const bottomY = clamp(Math.floor(h * 0.86), fontSize, h - fontSize);
+            // 推到“外侧”：沿着 (anchor - center) 的方向，把文字推出箱体外侧，避免落在面上
+            function pushOutside(anchor, baseOffset, extraY = 0) {
+                const dx = anchor.x - centerScreen.x;
+                const dy = anchor.y - centerScreen.y;
+                const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                const nx = dx / len;
+                const ny = dy / len;
+                return {
+                    x: clampX(anchor.x + nx * baseOffset),
+                    y: clampY(anchor.y + ny * baseOffset + extraY)
+                };
+            }
 
-            // 右侧高度数字：贴在竖边中部
-            const heightX = clamp(Math.floor(w * 0.84), 0, w);
-            const heightY = clamp(Math.floor(h * 0.50), fontSize, h - fontSize);
+            const outOffset = fontSize * 1.05;     // 外推距离（贴边但不过远）
+            const bottomExtraY = fontSize * 0.78;  // 底部数字下压，贴近底边外侧
+            const heightExtraX = fontSize * 0.98;  // 高度数字额外向右偏移（更靠右外侧）
 
-            // 宽：底部宽边左侧，只显示数字（无画框/无“宽/xxmm”文字）
-            drawPlainNumber(`${trayW}`, widthX, bottomY, 'left');
+            // 宽：左侧宽边“居中”，数字居中对齐
+            const widthPos = pushOutside(widthAnchor, outOffset, bottomExtraY);
+            // 微调：把 1000 再向左一点
+            const widthX = clampX(widthPos.x - fontSize * 0.12);
+            drawPlainNumber(`${trayW}`, widthX, widthPos.y, 'center');
 
-            // 长：底部长边右侧，只显示数字（无画框/无“长/xxmm”文字）
-            drawPlainNumber(`${trayL}`, lengthX, bottomY, 'right');
+            // 长：底部长边“居中”，数字居中对齐
+            const lengthPos = pushOutside(lengthAnchor, outOffset, bottomExtraY);
+            drawPlainNumber(`${trayL}`, lengthPos.x, lengthPos.y, 'center');
 
-            // 总高：右侧竖边中部，只显示数字（无画框/无“总高/xxmm”文字）
-            drawPlainNumber(`${actualTotalHeight}`, heightX, heightY, 'left');
+            // 总高：右侧高度“居中”，向右推到边外侧
+            const heightPos = pushOutside(heightAnchor, outOffset, 0);
+            drawPlainNumber(`${actualTotalHeight}`, clampX(heightPos.x + heightExtraX), heightPos.y, 'left');
 
             return offCanvas;
         } catch (e) {
