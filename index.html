@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Open Cape Pack 3D 智能堆叠优化器 | 专业版</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+        body {
+            font-family: 'Inter', 'Segoe UI', 'Roboto', system-ui, sans-serif;
+            background: #0a0c15;
+            color: #eef2ff;
+            overflow: hidden;
+            height: 100vh;
+        }
+        .app {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+        /* 左侧面板宽度调整为480px */
+        .controls {
+            width: 480px;
+            background: linear-gradient(145deg, #10141f 0%, #0b0f18 100%);
+            backdrop-filter: blur(0);
+            border-right: 1px solid rgba(59,130,246,0.25);
+            padding: 24px 20px;
+            overflow-y: auto;
+            z-index: 20;
+            box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+            transition: all 0.2s;
+        }
+        .controls::-webkit-scrollbar {
+            width: 5px;
+        }
+        .controls::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        .controls::-webkit-scrollbar-thumb {
+            background: #3b82f6;
+            border-radius: 8px;
+        }
+        .viewer {
+            flex: 1;
+            position: relative;
+            background: #f8fafc;
+        }
+        #canvas3d {
+            width: 100%;
+            height: 100%;
+            display: block;
+            outline: none;
+        }
+        .info-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(10px);
+            border-radius: 24px;
+            padding: 14px 22px;
+            border-left: 4px solid #3b82f6;
+            font-size: 0.85rem;
+            font-weight: 500;
+            z-index: 25;
+            pointer-events: none;
+            box-shadow: 0 12px 28px rgba(0,0,0,0.12);
+            color: #0f172a;
+            font-family: monospace;
+        }
+        .info-panel div {
+            margin: 5px 0;
+        }
+        .info-panel .label {
+            color: #475569;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .info-panel .value {
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: #2563eb;
+        }
+        .export-toolbar {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            gap: 12px;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            padding: 10px 16px;
+            border-radius: 48px;
+            border: 1px solid rgba(59,130,246,0.4);
+            z-index: 30;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+            transition: all 0.2s;
+        }
+        .export-btn {
+            background: rgba(255,255,255,0.12);
+            border: none;
+            padding: 8px 16px;
+            border-radius: 40px;
+            color: #eef2ff;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            backdrop-filter: blur(4px);
+            font-family: inherit;
+        }
+        .export-btn:hover {
+            background: #3b82f6;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59,130,246,0.4);
+        }
+        .export-btn:active {
+            transform: translateY(0);
+        }
+        .export-icon {
+            font-size: 1rem;
+        }
+        @media (max-width: 780px) {
+            .controls { width: 340px; padding: 16px; }
+            .export-toolbar { padding: 6px 12px; gap: 8px; }
+            .export-btn { padding: 6px 12px; font-size: 0.7rem; }
+        }
+        /* 卡片样式优化 */
+        .card {
+            background: rgba(18, 25, 45, 0.55);
+            backdrop-filter: blur(8px);
+            border-radius: 28px;
+            padding: 18px;
+            margin-bottom: 22px;
+            border: 1px solid rgba(59,130,246,0.2);
+            transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        .card:hover {
+            border-color: rgba(59,130,246,0.4);
+            background: rgba(18, 25, 45, 0.7);
+        }
+        .card-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-left: 3px solid #3b82f6;
+            padding-left: 12px;
+            color: #f1f5f9;
+            letter-spacing: 0.3px;
+        }
+        .input-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+        }
+        .input-field {
+            flex: 1;
+            min-width: 70px;
+        }
+        label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            display: block;
+            margin-bottom: 6px;
+            color: #9ca3af;
+            letter-spacing: 0.3px;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px 14px;
+            background: #0a0f1a;
+            border: 1px solid #2a364c;
+            border-radius: 20px;
+            color: #f1f5f9;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: 0.2s;
+        }
+        input:focus, select:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
+            outline: none;
+            background: #0f1622;
+        }
+        /* 堆叠策略一行显示 - 强制不换行 */
+        .radio-group {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 8px;
+            margin: 12px 0 8px;
+            justify-content: space-between;
+        }
+        .radio-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.72rem;
+            color: #cbd5e1;
+            background: #0a0f1a;
+            padding: 5px 8px;
+            border-radius: 32px;
+            border: 1px solid #2a364c;
+            transition: all 0.2s;
+            cursor: pointer;
+            flex: 1;
+            justify-content: center;
+            white-space: nowrap;
+        }
+        .radio-item:hover {
+            background: #1e2a3a;
+            border-color: #3b82f6;
+        }
+        input[type="radio"] {
+            width: auto;
+            margin-right: 4px;
+            accent-color: #3b82f6;
+        }
+        button {
+            background: linear-gradient(105deg, #2563eb, #3b82f6);
+            color: white;
+            border: none;
+            padding: 12px;
+            width: 100%;
+            border-radius: 40px;
+            font-weight: 700;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(37,99,235,0.3);
+            margin-top: 8px;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            filter: brightness(1.05);
+            box-shadow: 0 8px 20px rgba(37,99,235,0.4);
+        }
+        .stats {
+            background: #0f172a;
+            border-radius: 24px;
+            padding: 14px;
+            margin-top: 18px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            border: 1px solid #2d3a5e;
+        }
+        .stat-item {
+            text-align: center;
+            background: #1e293b;
+            padding: 10px 6px;
+            border-radius: 20px;
+            transition: 0.1s;
+        }
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: #fbbf24;
+            line-height: 1.2;
+        }
+        .stat-label {
+            font-size: 0.7rem;
+            color: #94a3b8;
+            font-weight: 600;
+        }
+        .warning {
+            background: rgba(250, 204, 21, 0.18);
+            border-left: 3px solid #facc15;
+            padding: 10px 12px;
+            border-radius: 18px;
+            font-size: 0.75rem;
+            margin-top: 12px;
+            text-align: center;
+            color: #fde047;
+        }
+        /* 隐藏不需要的提示文字 */
+        .extra-info, .footer-note {
+            display: none;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+<div class="app">
+    <div class="controls">
+        <div class="card">
+            <div class="card-title">📦 托盘参数</div>
+            <div class="input-row">
+                <div class="input-field"><label>长 L (mm)</label><input type="number" id="trayL" value="1200" step="10"></div>
+                <div class="input-field"><label>宽 W (mm)</label><input type="number" id="trayW" value="1000" step="10"></div>
+                <div class="input-field"><label>高 H (mm)</label><input type="number" id="trayH" value="126" step="5"></div>
+            </div>
+            <div><label>最大载重 (kg)</label><input type="number" id="trayLoad" value="1500" step="50"></div>
+        </div>
+        <div class="card">
+            <div class="card-title">🎁 纸箱规格</div>
+            <div class="input-row">
+                <div class="input-field"><label>长 L (mm)</label><input type="number" id="boxL" value="400" step="10"></div>
+                <div class="input-field"><label>宽 W (mm)</label><input type="number" id="boxW" value="300" step="10"></div>
+                <div class="input-field"><label>高 H (mm)</label><input type="number" id="boxH" value="250" step="10"></div>
+            </div>
+            <div><label>单箱重量 (kg)</label><input type="number" id="boxWeight" value="15" step="1"></div>
+            <div style="margin-top: 12px;"><label>📦 纸箱内产品数 (个/箱)</label><input type="number" id="productsPerBox" value="1" step="1" min="1"></div>
+        </div>
+        <div class="card">
+            <div class="card-title">⚙️ 堆叠策略 & 限制</div>
+            <div class="radio-group">
+                <label class="radio-item"><input type="radio" name="pattern" value="grid" checked> 📐 标准行列式</label>
+                <label class="radio-item"><input type="radio" name="pattern" value="staggered"> 🔄 交错堆叠</label>
+                <label class="radio-item"><input type="radio" name="pattern" value="mixed"> 🧠 混合朝向</label>
+            </div>
+            <div class="radio-group">
+                <label class="radio-item"><input type="radio" name="limitMode" value="height" checked> ⬆️ 高度限制</label>
+                <label class="radio-item"><input type="radio" name="limitMode" value="weight"> ⚖️ 重量限制</label>
+                <label class="radio-item"><input type="radio" name="limitMode" value="both"> 🔒 两者取严</label>
+            </div>
+            <div><label>📏 自定义堆叠限高 (mm) (0=使用托盘自身高度)</label><input type="number" id="customHeight" value="2200" step="50"></div>
+        </div>
+        <button id="calcBtn">🚀 智能计算 & 更新3D视图</button>
+        <div id="statsPanel" class="stats"></div>
+        <div id="warningMsg" class="warning" style="display: none;"></div>
+        <div class="extra-info"></div>
+        <div class="footer-note"></div>
+    </div>
+    <div class="viewer">
+        <canvas id="canvas3d"></canvas>
+        <div id="infoPanel" class="info-panel">
+            <div class="label">📐 托盘尺寸</div>
+            <div><span class="label">长:</span> <span id="infoTrayL" class="value">--</span> mm &nbsp; <span class="label">宽:</span> <span id="infoTrayW" class="value">--</span> mm</div>
+            <div class="label" style="margin-top: 6px;">📏 实际满载总高 (含托盘)</div>
+            <div><span id="infoTotalHeight" class="value">--</span> mm</div>
+        </div>
+        <div class="export-toolbar">
+            <button class="export-btn" id="exportPngBtn"><span class="export-icon">📸</span> PNG</button>
+            <button class="export-btn" id="exportJpgBtn"><span class="export-icon">🖼️</span> JPG</button>
+            <button class="export-btn" id="exportPdfBtn"><span class="export-icon">📄</span> PDF</button>
+        </div>
+    </div>
+</div>
+
+<script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.128.0/build/three.module.js"
+        }
+    }
+</script>
+
+<script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'https://unpkg.com/three@0.128.0/examples/jsm/controls/OrbitControls.js';
+
+    // DOM 绑定
+    const dom = {
+        trayL: document.getElementById('trayL'),
+        trayW: document.getElementById('trayW'),
+        trayH: document.getElementById('trayH'),
+        trayLoad: document.getElementById('trayLoad'),
+        boxL: document.getElementById('boxL'),
+        boxW: document.getElementById('boxW'),
+        boxH: document.getElementById('boxH'),
+        boxWeight: document.getElementById('boxWeight'),
+        productsPerBox: document.getElementById('productsPerBox'),
+        customHeight: document.getElementById('customHeight'),
+        calcBtn: document.getElementById('calcBtn'),
+        statsPanel: document.getElementById('statsPanel'),
+        warningMsg: document.getElementById('warningMsg'),
+        infoTrayL: document.getElementById('infoTrayL'),
+        infoTrayW: document.getElementById('infoTrayW'),
+        infoTotalHeight: document.getElementById('infoTotalHeight')
+    };
+
+    let currentResult = null;
+    let currentParams = null;
+
+    const backgroundColor = 0xeef2f8;
+    const canvas = document.getElementById('canvas3d');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(backgroundColor);
+
+    const camera = new THREE.PerspectiveCamera(42, 1, 2, 80000);
+    camera.position.set(1600, 1500, 1900);
+    camera.lookAt(0, 600, 0);
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, preserveDrawingBuffer: true });
+    renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // 提升清晰度：适配高DPI屏幕，确保缩放时物体保持锐利
+    renderer.setPixelRatio(window.devicePixelRatio);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.autoRotate = false;
+    controls.enableZoom = true;
+    controls.zoomSpeed = 1.2;
+    controls.rotateSpeed = 1.0;
+    controls.target.set(0, 500, 0);
+
+    // 光照系统
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.52);
+    scene.add(ambientLight);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xb9c7db, 0.38);
+    scene.add(hemiLight);
+    const mainLight = new THREE.DirectionalLight(0xfff0e0, 0.82);
+    mainLight.position.set(2.2, 3.2, 1.8);
+    mainLight.castShadow = true;
+    mainLight.receiveShadow = false;
+    mainLight.shadow.mapSize.width = 1024;
+    mainLight.shadow.mapSize.height = 1024;
+    scene.add(mainLight);
+    const backLight = new THREE.DirectionalLight(0xaaccff, 0.38);
+    backLight.position.set(-1.5, 2.0, -2.2);
+    scene.add(backLight);
+    const fillWarm = new THREE.PointLight(0xffaa77, 0.32);
+    fillWarm.position.set(1.2, 1.2, 1.5);
+    scene.add(fillWarm);
+    const fillCool = new THREE.PointLight(0x88aaff, 0.26);
+    fillCool.position.set(0, -0.3, 0.8);
+    scene.add(fillCool);
+    const rimLight = new THREE.PointLight(0xffcc99, 0.30);
+    rimLight.position.set(-1.0, 1.5, -1.2);
+    scene.add(rimLight);
+    
+    let currentGroup = null;
+
+    function createPalletBase(trayW, trayL, trayH) {
+        const group = new THREE.Group();
+        const trayGeo = new THREE.BoxGeometry(trayL, trayH, trayW);
+        const trayMat = new THREE.MeshStandardMaterial({ color: 0xe0bc7a, roughness: 0.5, metalness: 0.1 });
+        const trayMesh = new THREE.Mesh(trayGeo, trayMat);
+        trayMesh.position.set(0, trayH / 2, 0);
+        trayMesh.castShadow = true;
+        trayMesh.receiveShadow = true;
+        group.add(trayMesh);
+        const edgeMat = new THREE.MeshStandardMaterial({ color: 0xc2a15b });
+        const barPos = [
+            [-trayL/2 + 20, trayH-5, 0], [trayL/2 - 20, trayH-5, 0],
+            [0, trayH-5, -trayW/2 + 20], [0, trayH-5, trayW/2 - 20]
+        ];
+        barPos.forEach(pos => {
+            const bar = new THREE.Mesh(new THREE.BoxGeometry(50, 8, 50), edgeMat);
+            bar.position.set(pos[0], pos[1], pos[2]);
+            group.add(bar);
+        });
+        return group;
+    }
+
+    // 布局算法 (完整)
+    function gridPlacement(trayW, trayD, boxW, boxD) {
+        let countX = Math.floor(trayW / boxW);
+        let countY = Math.floor(trayD / boxD);
+        if (countX <= 0 || countY <= 0) return { count: 0, positions: [] };
+        let positions = [];
+        for (let i = 0; i < countX; i++)
+            for (let j = 0; j < countY; j++)
+                positions.push({ x: i * boxW, y: j * boxD, w: boxW, h: boxD });
+        return { count: positions.length, positions };
+    }
+    function staggeredPlacement(trayW, trayD, boxW, boxD) {
+        let baseX = Math.floor(trayW / boxW);
+        if (baseX === 0) return { count: 0, positions: [] };
+        let rowH = boxD;
+        let rows = Math.floor(trayD / rowH);
+        if (rows === 0) return { count: 0, positions: [] };
+        let positions = [];
+        let half = boxW / 2;
+        for (let r = 0; r < rows; r++) {
+            let offset = (r % 2 === 1) ? half : 0;
+            let curX = baseX;
+            if (offset > 0 && (offset + (curX - 1) * boxW + boxW) > trayW) curX--;
+            for (let c = 0; c < curX; c++) {
+                let x = offset + c * boxW;
+                if (x + boxW <= trayW) positions.push({ x, y: r * rowH, w: boxW, h: boxD });
+            }
+        }
+        return { count: positions.length, positions };
+    }
+    function fillRemaining(trayW, trayD, occupied, boxW, boxD) {
+        let step = 6;
+        let taken = Array(Math.ceil(trayW/step)+2).fill().map(()=>Array(Math.ceil(trayD/step)+2).fill(false));
+        for (let occ of occupied) {
+            let xs = Math.floor(occ.x/step), xe = Math.ceil((occ.x+occ.w)/step);
+            let ys = Math.floor(occ.y/step), ye = Math.ceil((occ.y+occ.h)/step);
+            for (let i = xs; i <= xe && i<taken.length; i++)
+                for (let j = ys; j <= ye && j<taken[0].length; j++)
+                    if(i>=0 && j>=0) taken[i][j]=true;
+        }
+        let newPos = [];
+        for (let y = 0; y <= trayD - boxD; y += boxD) {
+            for (let x = 0; x <= trayW - boxW; x += boxW) {
+                let can = true;
+                let xs = Math.floor(x/step), xe = Math.ceil((x+boxW)/step);
+                let ys = Math.floor(y/step), ye = Math.ceil((y+boxD)/step);
+                outer: for (let i=xs; i<=xe && i<taken.length; i++)
+                    for (let j=ys; j<=ye && j<taken[0].length; j++)
+                        if (taken[i][j]) { can=false; break outer; }
+                if (can) {
+                    newPos.push({ x, y, w: boxW, h: boxD });
+                    for (let i=xs; i<=xe && i<taken.length; i++)
+                        for (let j=ys; j<=ye && j<taken[0].length; j++)
+                            taken[i][j]=true;
+                }
+            }
+        }
+        return newPos;
+    }
+    function centerPositionsInTray(positions, trayW, trayD) {
+        if (!positions || positions.length === 0) return positions;
+        let minX = Infinity, minY = Infinity;
+        let maxX = -Infinity, maxY = -Infinity;
+        for (const p of positions) {
+            minX = Math.min(minX, p.x);
+            minY = Math.min(minY, p.y);
+            maxX = Math.max(maxX, p.x + p.w);
+            maxY = Math.max(maxY, p.y + p.h);
+        }
+        const usedW = maxX - minX;
+        const usedD = maxY - minY;
+        const offsetX = (trayW - usedW) / 2 - minX;
+        const offsetY = (trayD - usedD) / 2 - minY;
+        return positions.map(p => ({ ...p, x: p.x + offsetX, y: p.y + offsetY }));
+    }
+    function mixedOrientationPlacement(trayW, trayD, boxLen, boxWid) {
+        const ori = [{ w: boxLen, d: boxWid }, { w: boxWid, d: boxLen }];
+        let best = { count: 0, positions: [] };
+        for (let o of ori) {
+            let g = gridPlacement(trayW, trayD, o.w, o.d);
+            if (g.count > best.count) best = { count: g.count, positions: [...g.positions], usedOri: o };
+            let s = staggeredPlacement(trayW, trayD, o.w, o.d);
+            if (s.count > best.count) best = { count: s.count, positions: [...s.positions], usedOri: o };
+        }
+        if (best.count === 0) return best;
+        let altOri = ori.find(o => o !== best.usedOri);
+        if (altOri) {
+            let fill = fillRemaining(trayW, trayD, best.positions, altOri.w, altOri.d);
+            if (fill.length) { best.positions.push(...fill); best.count = best.positions.length; }
+        }
+        return best;
+    }
+    function getLayerLayout(trayL, trayW, boxL, boxW, pattern) {
+        let res;
+        switch(pattern){
+            case "grid":
+                let a = gridPlacement(trayL, trayW, boxL, boxW);
+                let b = gridPlacement(trayL, trayW, boxW, boxL);
+                res = a.count>=b.count ? a : b;
+                break;
+            case "staggered":
+                let c = staggeredPlacement(trayL, trayW, boxL, boxW);
+                let d = staggeredPlacement(trayL, trayW, boxW, boxL);
+                res = c.count>=d.count ? c : d;
+                break;
+            case "mixed":
+                res = mixedOrientationPlacement(trayL, trayW, boxL, boxW);
+                break;
+            default: res = gridPlacement(trayL, trayW, boxL, boxW);
+        }
+        if (res && res.positions && res.positions.length) {
+            res.positions = centerPositionsInTray(res.positions, trayL, trayW);
+        }
+        return res;
+    }
+
+    function compute(params) {
+        const { trayL, trayW, trayH, trayLoad, boxL, boxW, boxH, boxWgt, productsPerBox, pattern, limitMode, customHeight } = params;
+        let layer = getLayerLayout(trayL, trayW, boxL, boxW, pattern);
+        if (layer.count === 0) return { error: "单层无法容纳任何纸箱，请减小纸箱尺寸或增大托盘" };
+        let perLayerQty = layer.count;
+        let perLayerWeight = perLayerQty * boxWgt;
+        let effectiveHeight = (customHeight > 0) ? customHeight : trayH;
+        let maxLayersByHeight = Math.floor(effectiveHeight / boxH);
+        let maxLayersByWeight = (trayLoad <= 0) ? Infinity : Math.floor(trayLoad / perLayerWeight);
+        let finalMax = Infinity;
+        if (limitMode === "height") finalMax = maxLayersByHeight;
+        else if (limitMode === "weight") finalMax = maxLayersByWeight;
+        else finalMax = Math.min(maxLayersByHeight, maxLayersByWeight);
+        if (finalMax <= 0) finalMax = 0;
+        let layers = finalMax;
+        let totalQty = layers * perLayerQty;
+        let totalWeight = totalQty * boxWgt;
+        let totalProducts = totalQty * productsPerBox;
+        let warning = "";
+        if (maxLayersByHeight <= 0) warning = `⚠️ 堆叠高度不足（可用高度 ${effectiveHeight} mm，纸箱高 ${boxH} mm），无法堆叠任何层数！`;
+        else if (maxLayersByWeight <= 0 && trayLoad>0) warning = "⚠️ 单层重量已超过托盘最大载重！";
+        else if (layers === 0) warning = "⚠️ 约束条件导致无法堆叠 (层数为0)";
+        else if (layers < maxLayersByHeight && limitMode !== "height") warning = `📌 受重量/自定义限制，最大堆叠 ${layers} 层`;
+        else if (layers < maxLayersByWeight && limitMode !== "weight") warning = `📌 受高度限制，最大堆叠 ${layers} 层`;
+        let areaUtil = (perLayerQty * (boxL*boxW) / (trayL*trayW)*100).toFixed(1);
+        let actualTotalHeight = trayH + layers * boxH;
+        return {
+            success: true,
+            perLayerQty, layers, totalQty, totalWeight: totalWeight.toFixed(1),
+            totalProducts, productsPerBox,
+            areaUtil, warning,
+            layerPositions: layer.positions,
+            maxHeightLayers: maxLayersByHeight,
+            maxWeightLayers: maxLayersByWeight===Infinity?"不限":maxLayersByWeight,
+            effectiveHeight,
+            actualTotalHeight,
+            boxL, boxW, boxH, trayL, trayW, trayH
+        };
+    }
+
+    function getPattern() { let radios = document.getElementsByName('pattern'); for(let r of radios) if(r.checked) return r.value; return 'grid'; }
+    function getLimitMode() { let radios = document.getElementsByName('limitMode'); for(let r of radios) if(r.checked) return r.value; return 'height'; }
+
+    function createSolidBox(width, height, depth, position) {
+        const group = new THREE.Group();
+        const isWidthLong = width >= depth;
+        const redMat = new THREE.MeshStandardMaterial({ color: 0xcf3e3e, roughness: 0.38, metalness: 0.06 });
+        const blueMat = new THREE.MeshStandardMaterial({ color: 0x2c5f9a, roughness: 0.38, metalness: 0.06 });
+        const darkMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e6, roughness: 0.42, metalness: 0.04 });
+        let materials = isWidthLong ? [redMat, redMat, darkMat, darkMat, blueMat, blueMat] : [blueMat, blueMat, darkMat, darkMat, redMat, redMat];
+        const boxMesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), materials);
+        boxMesh.castShadow = true;
+        boxMesh.receiveShadow = true;
+        boxMesh.position.copy(position);
+        group.add(boxMesh);
+        const edgesGeo = new THREE.EdgesGeometry(boxMesh.geometry);
+        const edgesMat = new THREE.LineBasicMaterial({ color: 0x4b5563 });
+        const wireframe = new THREE.LineSegments(edgesGeo, edgesMat);
+        boxMesh.add(wireframe);
+        return group;
+    }
+
+    function update3DScene(result, params) {
+        if (currentGroup) scene.remove(currentGroup);
+        currentGroup = new THREE.Group();
+        const { trayL, trayW, trayH, boxH } = params;
+        const layers = result.layers, positionsLayer = result.layerPositions;
+        const palletGroup = createPalletBase(trayW, trayL, trayH);
+        currentGroup.add(palletGroup);
+        const startY = trayH;
+        for (let layerIdx = 0; layerIdx < layers; layerIdx++) {
+            const yBase = startY + layerIdx * boxH;
+            for (let pos of positionsLayer) {
+                const centerX = pos.x + pos.w/2 - trayL/2;
+                const centerZ = pos.y + pos.h/2 - trayW/2;
+                const boxGroup = createSolidBox(pos.w, boxH, pos.h, new THREE.Vector3(centerX, yBase + boxH/2, centerZ));
+                currentGroup.add(boxGroup);
+            }
+        }
+        scene.add(currentGroup);
+        dom.infoTrayL.innerText = trayL;
+        dom.infoTrayW.innerText = trayW;
+        dom.infoTotalHeight.innerText = result.actualTotalHeight;
+    }
+
+    function updateStatsUI(result) {
+        if (!result.success) {
+            dom.statsPanel.innerHTML = `<div style="grid-column:span 2; color:#f87171;">${result.error}</div>`;
+            dom.warningMsg.style.display = 'block';
+            dom.warningMsg.innerText = result.error;
+            return;
+        }
+        dom.statsPanel.innerHTML = `
+            <div class="stat-item"><div class="stat-value">${result.perLayerQty}</div><div class="stat-label">每层数量</div></div>
+            <div class="stat-item"><div class="stat-value">${result.layers}</div><div class="stat-label">堆叠层数</div></div>
+            <div class="stat-item"><div class="stat-value">${result.totalQty}</div><div class="stat-label">堆叠产品箱数</div></div>
+            <div class="stat-item"><div class="stat-value">${result.totalWeight} kg</div><div class="stat-label">总重量</div></div>
+            <div class="stat-item"><div class="stat-value">${result.areaUtil}%</div><div class="stat-label">面积利用率</div></div>
+            <div class="stat-item"><div class="stat-value">${result.totalProducts}</div><div class="stat-label">产品总数</div></div>
+        `;
+        if (result.warning) { dom.warningMsg.style.display = 'block'; dom.warningMsg.innerText = result.warning; } 
+        else { dom.warningMsg.style.display = 'none'; }
+    }
+
+    function onCalculate() {
+        const trayL = parseFloat(dom.trayL.value), trayW = parseFloat(dom.trayW.value), trayH = parseFloat(dom.trayH.value);
+        const trayLoad = parseFloat(dom.trayLoad.value) || 0;
+        const boxL = parseFloat(dom.boxL.value), boxW = parseFloat(dom.boxW.value), boxH = parseFloat(dom.boxH.value);
+        const boxWgt = parseFloat(dom.boxWeight.value) || 0;
+        const productsPerBox = parseInt(dom.productsPerBox.value) || 1;
+        const customHeight = parseFloat(dom.customHeight.value) || 0;
+        if ([trayL, trayW, trayH, boxL, boxW, boxH].some(v => v <= 0)) { alert("所有尺寸必须为正数"); return; }
+        const params = { trayL, trayW, trayH, trayLoad, boxL, boxW, boxH, boxWgt, productsPerBox, pattern: getPattern(), limitMode: getLimitMode(), customHeight };
+        const result = compute(params);
+        currentResult = result;
+        currentParams = params;
+        updateStatsUI(result);
+        if (result.success) update3DScene(result, params);
+        else {
+            if (currentGroup) scene.remove(currentGroup);
+            const onlyPallet = createPalletBase(trayW, trayL, trayH);
+            currentGroup = onlyPallet;
+            scene.add(onlyPallet);
+            dom.infoTrayL.innerText = trayL; dom.infoTrayW.innerText = trayW; dom.infoTotalHeight.innerText = trayH;
+        }
+    }
+
+    // ========== 导出功能：超清渲染，表格恢复原来样式 ==========
+    // 绘制表格信息（原始6行数据）
+    function drawInfoTableOnCanvas(sourceCanvas, result, params) {
+        if (!result || !result.success) return sourceCanvas;
+        const w = sourceCanvas.width;
+        const h = sourceCanvas.height;
+        const offCanvas = document.createElement('canvas');
+        offCanvas.width = w;
+        offCanvas.height = h;
+        const ctx = offCanvas.getContext('2d');
+        ctx.drawImage(sourceCanvas, 0, 0);
+        
+        const rows = [
+            ['堆叠层数', result.layers + ' 层'],
+            ['堆叠箱数', result.totalQty + ' 箱'],
+            ['托盘尺寸', params.trayL + ' x ' + params.trayW + ' mm'],
+            ['堆叠总高', result.actualTotalHeight + ' mm (含托盘)'],
+            ['每箱产品数', result.productsPerBox + ' 个'],
+            ['产品总数', result.totalProducts + ' 个']
+        ];
+        
+        const fontSize = Math.max(11, Math.floor(h / 48));
+        ctx.font = `${fontSize}px "Microsoft YaHei", "微软雅黑", "Segoe UI", system-ui, sans-serif`;
+        const lineHeight = fontSize * 1.6;
+        const padding = fontSize * 0.8;
+        const colPadding = fontSize * 0.8;
+        let col1Width = 0, col2Width = 0;
+        for (let row of rows) {
+            const metrics1 = ctx.measureText(row[0]);
+            const metrics2 = ctx.measureText(row[1]);
+            col1Width = Math.max(col1Width, metrics1.width);
+            col2Width = Math.max(col2Width, metrics2.width);
+        }
+        const tableWidth = col1Width + col2Width + padding * 2 + colPadding * 2;
+        const tableHeight = rows.length * lineHeight + padding * 2;
+        const tableX = (w - tableWidth) / 2;
+        const tableY = h - tableHeight - fontSize * 1.5;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+        ctx.fillRect(tableX, tableY, tableWidth, tableHeight);
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(tableX, tableY, tableWidth, tableHeight);
+        const midX = tableX + padding + col1Width + colPadding;
+        ctx.beginPath();
+        ctx.moveTo(midX, tableY);
+        ctx.lineTo(midX, tableY + tableHeight);
+        ctx.stroke();
+        for (let i = 1; i < rows.length; i++) {
+            const y = tableY + padding + i * lineHeight;
+            ctx.beginPath();
+            ctx.moveTo(tableX, y);
+            ctx.lineTo(tableX + tableWidth, y);
+            ctx.stroke();
+        }
+        ctx.fillStyle = '#ffffff';
+        ctx.textBaseline = 'middle';
+        for (let i = 0; i < rows.length; i++) {
+            const rowY = tableY + padding + i * lineHeight + lineHeight / 2;
+            ctx.fillText(rows[i][0], tableX + padding, rowY);
+            ctx.fillText(rows[i][1], midX + colPadding, rowY);
+        }
+        return offCanvas;
+    }
+
+    // 导出图像用：在画面上叠加托盘尺寸文字（不修改原表格绘制逻辑）
+    function drawTrayDimensionLabelsOnCanvas(offCanvas, result, params, camera) {
+        try {
+            if (!offCanvas || !result || !result.success || !params) return offCanvas;
+
+            const ctx = offCanvas.getContext('2d');
+            if (!ctx) return offCanvas;
+
+            const w = offCanvas.width;
+            const h = offCanvas.height;
+
+            // 字体：强制微软雅黑，确保导出清晰可读
+            const fontSize = Math.max(16, Math.min(36, Math.floor(h / 45)));
+            ctx.font = `${fontSize}px "Microsoft YaHei", "微软雅黑", "Segoe UI", system-ui, sans-serif`;
+            ctx.textBaseline = 'middle';
+
+            function projectToScreen(vec3) {
+                const v = vec3.clone().project(camera);
+                return {
+                    x: (v.x + 1) / 2 * w,
+                    y: (-v.y + 1) / 2 * h
+                };
+            }
+
+            function drawLabel(text, x, y, align) {
+                ctx.textAlign = align;
+                const metrics = ctx.measureText(text);
+                const paddingX = fontSize * 0.55;
+                const paddingY = fontSize * 0.35;
+                const boxW = metrics.width + paddingX * 2;
+                const boxH = fontSize + paddingY * 2;
+
+                let boxX;
+                if (align === 'left') boxX = x;
+                else if (align === 'right') boxX = x - boxW;
+                else boxX = x - boxW / 2;
+
+                const boxY = y - boxH / 2;
+
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+                ctx.lineWidth = Math.max(1, Math.floor(fontSize / 18));
+                ctx.beginPath();
+                const r = Math.max(6, Math.floor(fontSize / 3.2));
+                // 简易圆角矩形
+                ctx.moveTo(boxX + r, boxY);
+                ctx.arcTo(boxX + boxW, boxY, boxX + boxW, boxY + boxH, r);
+                ctx.arcTo(boxX + boxW, boxY + boxH, boxX, boxY + boxH, r);
+                ctx.arcTo(boxX, boxY + boxH, boxX, boxY, r);
+                ctx.arcTo(boxX, boxY, boxX + boxW, boxY, r);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.fillStyle = '#0f172a';
+                ctx.fillText(text, x, y);
+            }
+
+            function drawPlainNumber(text, x, y, align) {
+                ctx.textAlign = align;
+                // 仅绘制数字，不绘制画框/底板，避免遮挡托盘边线
+                ctx.fillStyle = '#0f172a';
+                ctx.fillText(text, x, y);
+            }
+
+            const trayL = params.trayL;
+            const trayW = params.trayW;
+            const trayH = params.trayH;
+            const boxH = params.boxH;
+
+            const actualTotalHeight = result.actualTotalHeight;
+            const stackMidY = trayH + (actualTotalHeight - trayH) * 0.5;
+
+            // 以堆叠中心点为参考，后续用于把文字推到托盘“外侧”贴边显示
+            const centerScreen = projectToScreen(new THREE.Vector3(0, actualTotalHeight / 2, 0));
+
+            // 底部托盘附近的 y 取值：避免贴边文字被底板/阴影遮住
+            const baseY = Math.max(6, actualTotalHeight * 0.02);
+
+            function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+
+            // 把 2D 锚点沿 x 方向推到外侧（贴边），并根据左右侧确定 textAlign
+            function pushToOutsideX(anchor) {
+                const dx = anchor.x - centerScreen.x;
+                const sign = dx >= 0 ? 1 : -1;
+                const x = anchor.x + sign * Math.max(22, Math.floor(fontSize * 1.0));
+                const align = sign > 0 ? 'left' : 'right';
+                const y = anchor.y;
+                return { x: x, y: y, align };
+            }
+
+            // 1) 宽数值：贴“宽边”左侧（底部边缘，靠近截图里的 1000）
+            // 宽边 = 固定 x（托盘左/右边），沿 z 方向的那条底部边。
+            const widthEdgeCandidates = [
+                { xConst: -trayL / 2, key: 'leftX' },
+                { xConst: trayL / 2, key: 'rightX' }
+            ].map(c => {
+                const p1 = projectToScreen(new THREE.Vector3(c.xConst, baseY, -trayW / 2));
+                const p2 = projectToScreen(new THREE.Vector3(c.xConst, baseY, trayW / 2));
+                return { xConst: c.xConst, mid: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 } };
+            });
+            // 选择屏幕最左边的那条宽边作为“宽值”锚点
+            widthEdgeCandidates.sort((a, b) => a.mid.x - b.mid.x);
+            const widthAnchor = widthEdgeCandidates[0].mid;
+            const widthPos = pushToOutsideX(widthAnchor);
+            // 微调：让数字更靠近底部边线
+            const widthY = clamp(widthPos.y + fontSize * 0.28, fontSize, h - fontSize);
+            drawPlainNumber(`${trayW}`, widthPos.x, widthY, widthPos.align);
+
+            // 2) 长数值：贴“长边”右侧（底部边缘，靠近截图里的 1200）
+            // 长边 = 固定 z（托盘前/后边），沿 x 方向的那条底部边。
+            const lengthEdgeCandidates = [
+                { zConst: -trayW / 2, key: 'frontZ' },
+                { zConst: trayW / 2, key: 'backZ' }
+            ].map(c => {
+                const p1 = projectToScreen(new THREE.Vector3(-trayL / 2, baseY, c.zConst));
+                const p2 = projectToScreen(new THREE.Vector3(trayL / 2, baseY, c.zConst));
+                return { zConst: c.zConst, mid: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 } };
+            });
+            // 选择屏幕最右边的那条长边作为“长值”锚点
+            lengthEdgeCandidates.sort((a, b) => b.mid.x - a.mid.x);
+            const lengthAnchor = lengthEdgeCandidates[0].mid;
+            const lengthPos = pushToOutsideX(lengthAnchor);
+            // 微调：让数字更靠近底部边线
+            const lengthY = clamp(lengthPos.y + fontSize * 0.28, fontSize, h - fontSize);
+            drawPlainNumber(`${trayL}`, lengthPos.x, lengthY, lengthPos.align);
+
+            // 3) 高度数值：贴右侧竖边中部（截图里的 2126）
+            const heightY = actualTotalHeight * 0.62;
+            const rightSideX = trayL / 2;
+            const heightCandidates = [
+                { zConst: -trayW / 2 },
+                { zConst: trayW / 2 }
+            ].map(c => {
+                const p = projectToScreen(new THREE.Vector3(rightSideX, heightY, c.zConst));
+                return { zConst: c.zConst, p };
+            });
+            // 取屏幕最右的点
+            heightCandidates.sort((a, b) => b.p.x - a.p.x);
+            const heightAnchor = heightCandidates[0].p;
+            const heightPos = pushToOutsideX(heightAnchor);
+            const heightY2 = clamp(heightPos.y, fontSize * 1.2, h - fontSize * 1.2);
+            drawPlainNumber(`${actualTotalHeight}`, heightPos.x, heightY2, heightPos.align);
+
+            return offCanvas;
+        } catch (e) {
+            console.warn('叠加尺寸文字失败', e);
+            return offCanvas;
+        }
+    }
+    
+    // 高清捕获：临时放大渲染器尺寸，获取高清图像后恢复
+    async function captureHighResCanvas(scale = 2.5) {
+        if (!currentResult || !currentResult.success) {
+            return renderer.domElement;
+        }
+        
+        // 保存当前状态
+        const origWidth = renderer.domElement.clientWidth;
+        const origHeight = renderer.domElement.clientHeight;
+        const origPixelRatio = renderer.getPixelRatio();
+        
+        // 计算新尺寸（限制最大尺寸，避免内存溢出）
+        let newWidth = Math.floor(origWidth * scale);
+        let newHeight = Math.floor(origHeight * scale);
+        const maxDim = 5000;
+        if (newWidth > maxDim || newHeight > maxDim) {
+            const ratio = Math.min(maxDim / newWidth, maxDim / newHeight);
+            newWidth = Math.floor(newWidth * ratio);
+            newHeight = Math.floor(newHeight * ratio);
+        }
+        
+        // 临时调整渲染器尺寸和像素比
+        renderer.setSize(newWidth, newHeight, false);
+        renderer.setPixelRatio(1);
+        
+        // 相机宽高比调整
+        camera.aspect = newWidth / newHeight;
+        camera.updateProjectionMatrix();
+        
+        // 强制渲染一帧
+        renderer.render(scene, camera);
+        
+        // 获取当前渲染的canvas
+        const sourceCanvas = renderer.domElement;
+        
+        // 绘制表格信息（原始表格）
+        const finalCanvas = drawInfoTableOnCanvas(sourceCanvas, currentResult, currentParams);
+
+        // 叠加托盘尺寸文字（导出专用）
+        drawTrayDimensionLabelsOnCanvas(finalCanvas, currentResult, currentParams, camera);
+        
+        // 恢复原尺寸
+        renderer.setSize(origWidth, origHeight, false);
+        renderer.setPixelRatio(origPixelRatio);
+        camera.aspect = origWidth / origHeight;
+        camera.updateProjectionMatrix();
+        
+        // 恢复后立即渲染一帧，使画面恢复正常
+        renderer.render(scene, camera);
+        
+        return finalCanvas;
+    }
+    
+    async function exportImage(format, quality = 0.95) {
+        try {
+            const highResCanvas = await captureHighResCanvas(2.5);
+            const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
+            const ext = format === 'png' ? 'png' : 'jpg';
+            const dataURL = highResCanvas.toDataURL(mimeType, quality);
+            const link = document.createElement('a');
+            link.download = `stacking_export.${ext}`;
+            link.href = dataURL;
+            link.click();
+        } catch (e) {
+            console.error('导出失败', e);
+            alert('导出失败，请重试');
+        }
+    }
+    
+    async function exportPDF() {
+        try {
+            const highResCanvas = await captureHighResCanvas(2.5);
+            const dataURL = highResCanvas.toDataURL('image/png', 1.0);
+            const img = new Image();
+            img.src = dataURL;
+            await new Promise((resolve) => { img.onload = resolve; });
+            const { jsPDF } = window.jspdf;
+            const imgWidth = img.width;
+            const imgHeight = img.height;
+            const orientation = imgWidth > imgHeight ? 'landscape' : 'portrait';
+            const pdf = new jsPDF({ orientation, unit: 'mm', format: 'a4' });
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            let ratio = Math.min(pageWidth / imgWidth, pageHeight / imgHeight);
+            let width = imgWidth * ratio;
+            let height = imgHeight * ratio;
+            let x = (pageWidth - width) / 2;
+            let y = (pageHeight - height) / 2;
+            pdf.addImage(img, 'PNG', x, y, width, height);
+            pdf.save('stacking_export.pdf');
+        } catch (e) {
+            console.error('PDF导出失败', e);
+            alert('PDF导出失败，请重试');
+        }
+    }
+    
+    document.getElementById('exportPngBtn').addEventListener('click', () => exportImage('png'));
+    document.getElementById('exportJpgBtn').addEventListener('click', () => exportImage('jpg', 0.92));
+    document.getElementById('exportPdfBtn').addEventListener('click', exportPDF);
+    
+    function resizeCanvas() {
+        const width = document.querySelector('.viewer').clientWidth;
+        const height = document.querySelector('.viewer').clientHeight;
+        renderer.setSize(width, height);
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', resizeCanvas);
+    function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+    animate();
+    dom.calcBtn.addEventListener('click', onCalculate);
+    setTimeout(() => { resizeCanvas(); onCalculate(); }, 150);
+</script>
+</body>
+</html>
