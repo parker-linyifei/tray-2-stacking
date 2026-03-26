@@ -134,6 +134,39 @@
             .export-toolbar { padding: 6px 12px; gap: 8px; }
             .export-btn { padding: 6px 12px; font-size: 0.7rem; }
         }
+        /* 手机端适配：上下布局，避免画布被挤压 */
+        @media (max-width: 600px) {
+            body { overflow: hidden; }
+            .app { flex-direction: column; }
+            .controls {
+                width: 100%;
+                height: 42vh;
+                padding: 14px 14px;
+                border-right: none;
+                border-bottom: 1px solid rgba(59,130,246,0.25);
+                box-shadow: none;
+            }
+            .viewer { flex: 1; min-height: 0; }
+            .info-panel {
+                top: 10px;
+                right: 10px;
+                left: 10px;
+                padding: 10px 14px;
+                font-size: 0.78rem;
+            }
+            .export-toolbar {
+                left: 10px;
+                right: 10px;
+                bottom: 10px;
+                justify-content: space-between;
+            }
+            .export-btn {
+                flex: 1;
+                justify-content: center;
+                padding: 10px 0;
+                font-size: 0.75rem;
+            }
+        }
         /* 卡片样式优化 */
         .card {
             background: rgba(18, 25, 45, 0.55);
@@ -843,73 +876,31 @@
             // 以堆叠中心点为参考，后续用于把文字推到托盘“外侧”贴边显示
             const centerScreen = projectToScreen(new THREE.Vector3(0, actualTotalHeight / 2, 0));
 
-            // 底部托盘附近的 y 取值：避免贴边文字被底板/阴影遮住
-            const baseY = Math.max(6, actualTotalHeight * 0.02);
+            // 关键修改：为了保证“任意旋转角度导出后数字位置都一致”，
+            // 这里改为使用固定的 2D 屏幕坐标绘制数字，而不是把 3D 点投影到屏幕。
+            // （否则旋转会改变 project() 的结果，导致数字漂移）
 
             function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
 
-            // 把 2D 锚点沿 x 方向推到外侧（贴边），并根据左右侧确定 textAlign
-            function pushToOutsideX(anchor) {
-                const dx = anchor.x - centerScreen.x;
-                const sign = dx >= 0 ? 1 : -1;
-                const x = anchor.x + sign * Math.max(22, Math.floor(fontSize * 1.0));
-                const align = sign > 0 ? 'left' : 'right';
-                const y = anchor.y;
-                return { x: x, y: y, align };
-            }
+            // 收拢与模型的距离：把数字整体向画面中心靠近一点
+            const widthX = clamp(Math.floor(w * 0.22), 0, w);
+            const lengthX = clamp(Math.floor(w * 0.78), 0, w);
 
-            // 1) 宽数值：贴“宽边”左侧（底部边缘，靠近截图里的 1000）
-            // 宽边 = 固定 x（托盘左/右边），沿 z 方向的那条底部边。
-            const widthEdgeCandidates = [
-                { xConst: -trayL / 2, key: 'leftX' },
-                { xConst: trayL / 2, key: 'rightX' }
-            ].map(c => {
-                const p1 = projectToScreen(new THREE.Vector3(c.xConst, baseY, -trayW / 2));
-                const p2 = projectToScreen(new THREE.Vector3(c.xConst, baseY, trayW / 2));
-                return { xConst: c.xConst, mid: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 } };
-            });
-            // 选择屏幕最左边的那条宽边作为“宽值”锚点
-            widthEdgeCandidates.sort((a, b) => a.mid.x - b.mid.x);
-            const widthAnchor = widthEdgeCandidates[0].mid;
-            const widthPos = pushToOutsideX(widthAnchor);
-            // 微调：让数字更靠近底部边线
-            const widthY = clamp(widthPos.y + fontSize * 0.28, fontSize, h - fontSize);
-            drawPlainNumber(`${trayW}`, widthPos.x, widthY, widthPos.align);
+            // 底部两侧数字：贴在托盘底边附近（避免碰到表格区域）
+            const bottomY = clamp(Math.floor(h * 0.86), fontSize, h - fontSize);
 
-            // 2) 长数值：贴“长边”右侧（底部边缘，靠近截图里的 1200）
-            // 长边 = 固定 z（托盘前/后边），沿 x 方向的那条底部边。
-            const lengthEdgeCandidates = [
-                { zConst: -trayW / 2, key: 'frontZ' },
-                { zConst: trayW / 2, key: 'backZ' }
-            ].map(c => {
-                const p1 = projectToScreen(new THREE.Vector3(-trayL / 2, baseY, c.zConst));
-                const p2 = projectToScreen(new THREE.Vector3(trayL / 2, baseY, c.zConst));
-                return { zConst: c.zConst, mid: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 } };
-            });
-            // 选择屏幕最右边的那条长边作为“长值”锚点
-            lengthEdgeCandidates.sort((a, b) => b.mid.x - a.mid.x);
-            const lengthAnchor = lengthEdgeCandidates[0].mid;
-            const lengthPos = pushToOutsideX(lengthAnchor);
-            // 微调：让数字更靠近底部边线
-            const lengthY = clamp(lengthPos.y + fontSize * 0.28, fontSize, h - fontSize);
-            drawPlainNumber(`${trayL}`, lengthPos.x, lengthY, lengthPos.align);
+            // 右侧高度数字：贴在竖边中部
+            const heightX = clamp(Math.floor(w * 0.84), 0, w);
+            const heightY = clamp(Math.floor(h * 0.50), fontSize, h - fontSize);
 
-            // 3) 高度数值：贴右侧竖边中部（截图里的 2126）
-            const heightY = actualTotalHeight * 0.62;
-            const rightSideX = trayL / 2;
-            const heightCandidates = [
-                { zConst: -trayW / 2 },
-                { zConst: trayW / 2 }
-            ].map(c => {
-                const p = projectToScreen(new THREE.Vector3(rightSideX, heightY, c.zConst));
-                return { zConst: c.zConst, p };
-            });
-            // 取屏幕最右的点
-            heightCandidates.sort((a, b) => b.p.x - a.p.x);
-            const heightAnchor = heightCandidates[0].p;
-            const heightPos = pushToOutsideX(heightAnchor);
-            const heightY2 = clamp(heightPos.y, fontSize * 1.2, h - fontSize * 1.2);
-            drawPlainNumber(`${actualTotalHeight}`, heightPos.x, heightY2, heightPos.align);
+            // 宽：底部宽边左侧，只显示数字（无画框/无“宽/xxmm”文字）
+            drawPlainNumber(`${trayW}`, widthX, bottomY, 'left');
+
+            // 长：底部长边右侧，只显示数字（无画框/无“长/xxmm”文字）
+            drawPlainNumber(`${trayL}`, lengthX, bottomY, 'right');
+
+            // 总高：右侧竖边中部，只显示数字（无画框/无“总高/xxmm”文字）
+            drawPlainNumber(`${actualTotalHeight}`, heightX, heightY, 'left');
 
             return offCanvas;
         } catch (e) {
