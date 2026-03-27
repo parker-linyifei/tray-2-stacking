@@ -157,7 +157,7 @@
             .export-toolbar {
                 left: 10px;
                 right: 10px;
-                bottom: 10px;
+                bottom: 24px;
                 justify-content: space-between;
             }
             .export-btn {
@@ -917,7 +917,7 @@
 
             const outOffset = fontSize * 1.05;     // 外推距离（贴边但不过远）
             const bottomExtraY = fontSize * 0.78;  // 底部数字下压，贴近底边外侧
-            const heightExtraX = fontSize * 0.98;  // 高度数字额外向右偏移（更靠右外侧）
+            const heightExtraX = fontSize * 1.18;  // 高度数字额外向右偏移（再向外一点）
 
             // 宽：左侧宽边“居中”，数字居中对齐
             const widthPos = pushOutside(widthAnchor, outOffset, bottomExtraY);
